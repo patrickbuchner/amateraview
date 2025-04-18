@@ -1,7 +1,15 @@
+use crate::state::State;
+use amateraview_common::plugin::PluginHandle;
 use eyre::{Context, Result};
-use iced::Theme;
-use iced::widget::{Column, button, column, text};
+use iced::widget::container::Style;
+use iced::widget::{
+    Column, Container, PaneGrid, button, center, column, container, pane_grid, responsive, row,
+    text,
+};
+use iced::{Border, Element, Fill, Theme};
 use tracing::{info, instrument};
+
+mod state;
 
 fn main() -> Result<()> {
     let subscriber = tracing_subscriber::fmt()
@@ -20,7 +28,7 @@ fn main() -> Result<()> {
         .wrap_err("Failed to initialize the subscriber.")?;
 
     iced::application("A counter", update, view)
-        .theme(|_| Theme::Dark)
+        // .theme(|_| Theme::Dark)
         .centered()
         .run()
         .wrap_err("Failed to run the application.")
@@ -28,17 +36,62 @@ fn main() -> Result<()> {
 
 #[derive(Debug, Clone)]
 enum Message {
-    Increment,
+    Increment(PluginHandle),
+    Nop,
 }
-#[instrument]
-fn update(value: &mut u64, message: Message) {
+#[instrument(skip(state))]
+fn update(state: &mut State, message: Message) {
     info!("{:?}", message);
     match message {
-        Message::Increment => *value += 1,
+        Message::Increment(handle) => {
+            let plugin = state.plugins.get_mut(&handle).unwrap();
+            plugin.val += 1;
+            plugin.title = format!("{} {}", plugin.title, plugin.val);
+        }
+        _ => {}
     }
     info!("Leaving");
 }
 
-fn view(value: &u64) -> Column<Message> {
-    column![text(value), button("+").on_press(Message::Increment),]
+fn view(state: &State) -> Element<'_, Message> {
+    let pane_grid = PaneGrid::new(&state.panes, |id, handle, is_maximized| {
+        let plugin = state.plugins.get(&handle).unwrap();
+        pane_grid::Content::new(responsive(move |a| {
+            container(
+                button("Increment")
+                    .on_press(Message::Increment(handle.clone()))
+                    .style(button::primary),
+            )
+            .padding(10)
+            .into()
+        }))
+        .title_bar(
+            pane_grid::TitleBar::new(row![text(plugin.title.clone())])
+                .padding(10)
+                .style(title_bar_style),
+        )
+    })
+    .width(Fill)
+    .height(Fill)
+    .spacing(10);
+
+    container(pane_grid)
+        .width(Fill)
+        .height(Fill)
+        .padding(10)
+        .into()
+}
+
+fn title_bar_style(theme: &Theme) -> Style {
+    let palette = theme.extended_palette();
+
+    container::Style {
+        background: Some(palette.background.weak.color.into()),
+        border: Border {
+            width: 2.0,
+            color: palette.background.strong.color,
+            ..Border::default()
+        },
+        ..Default::default()
+    }
 }
