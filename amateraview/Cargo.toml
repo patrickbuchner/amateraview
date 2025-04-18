@@ -1,0 +1,11 @@
+[package]
+name = "amateraview"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+amateraview-common.workspace = true
+eyre.workspace = true
+iced = { version = "0.13.1", features = ["advanced", "multi-window", "markdown", "image", "canvas"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
