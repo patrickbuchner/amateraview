@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive( Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Button {
     pub state: ButtonState,
     pub description: String,

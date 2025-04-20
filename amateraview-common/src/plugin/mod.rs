@@ -5,6 +5,12 @@ pub struct PluginHandle {
     id: uuid::Uuid,
 }
 
+impl Default for PluginHandle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PluginHandle {
     pub fn new() -> Self {
         Self {

@@ -1,9 +1,10 @@
 use crate::state::State;
 use amateraview_common::plugin::PluginHandle;
+use amateraview_common::ui::WidgetHandle;
 use eyre::{Context, Result};
 use iced::widget::container::Style;
 use iced::widget::{
-    Column, Container, PaneGrid, button, center, column, container, pane_grid, responsive, row,
+     PaneGrid, container, pane_grid, responsive, row,
     text,
 };
 use iced::{Border, Element, Fill, Theme};
@@ -36,34 +37,23 @@ fn main() -> Result<()> {
 
 #[derive(Debug, Clone)]
 enum Message {
-    Increment(PluginHandle),
-    Nop,
+    ButtonPressed(PluginHandle, WidgetHandle),
 }
 #[instrument(skip(state))]
 fn update(state: &mut State, message: Message) {
     info!("{:?}", message);
-    match message {
-        Message::Increment(handle) => {
-            let plugin = state.plugins.get_mut(&handle).unwrap();
-            plugin.val += 1;
-            plugin.title = format!("{} {}", plugin.title, plugin.val);
-        }
-        _ => {}
+    if let Message::ButtonPressed(handle, widget) = message {
+        let plugin = state.plugins.get_mut(&handle).unwrap();
+        plugin.triggered(widget);
     }
     info!("Leaving");
 }
 
 fn view(state: &State) -> Element<'_, Message> {
-    let pane_grid = PaneGrid::new(&state.panes, |id, handle, is_maximized| {
-        let plugin = state.plugins.get(&handle).unwrap();
-        pane_grid::Content::new(responsive(move |a| {
-            container(
-                button("Increment")
-                    .on_press(Message::Increment(handle.clone()))
-                    .style(button::primary),
-            )
-            .padding(10)
-            .into()
+    let pane_grid = PaneGrid::new(&state.panes, |_id, handle, _is_maximized| {
+        let plugin = state.plugins.get(handle).unwrap();
+        pane_grid::Content::new(responsive(move |_a| {
+            container(plugin.view()).padding(10).into()
         }))
         .title_bar(
             pane_grid::TitleBar::new(row![text(plugin.title.clone())])
