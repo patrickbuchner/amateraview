@@ -21,6 +21,12 @@ pub struct WidgetHandle {
     id: uuid::Uuid,
 }
 
+impl std::fmt::Display for WidgetHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.id)
+    }
+}
+
 impl Default for WidgetHandle {
     fn default() -> Self {
         Self::new()

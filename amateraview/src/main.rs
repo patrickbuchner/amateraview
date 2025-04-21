@@ -3,12 +3,9 @@ use amateraview_common::plugin::PluginHandle;
 use amateraview_common::ui::WidgetHandle;
 use eyre::{Context, Result};
 use iced::widget::container::Style;
-use iced::widget::{
-     PaneGrid, container, pane_grid, responsive, row,
-    text,
-};
-use iced::{Border, Element, Fill, Theme};
-use tracing::{info, instrument};
+use iced::widget::{PaneGrid, container, pane_grid, pick_list, responsive, row, text};
+use iced::{Border, Element, Fill, Length, Theme};
+use tracing::info;
 
 mod state;
 
@@ -29,7 +26,7 @@ fn main() -> Result<()> {
         .wrap_err("Failed to initialize the subscriber.")?;
 
     iced::application("A counter", update, view)
-        // .theme(|_| Theme::Dark)
+        .theme(State::theme)
         .centered()
         .run()
         .wrap_err("Failed to run the application.")
@@ -38,15 +35,30 @@ fn main() -> Result<()> {
 #[derive(Debug, Clone)]
 enum Message {
     ButtonPressed(PluginHandle, WidgetHandle),
+    Clicked(pane_grid::Pane),
+    Dragged(pane_grid::DragEvent),
+    Resized(pane_grid::ResizeEvent),
+    ThemeChanged(Theme),
 }
-#[instrument(skip(state))]
+
 fn update(state: &mut State, message: Message) {
-    info!("{:?}", message);
-    if let Message::ButtonPressed(handle, widget) = message {
-        let plugin = state.plugins.get_mut(&handle).unwrap();
-        plugin.triggered(widget);
+    match message {
+        Message::ButtonPressed(handle, widget) => {
+            let plugin = state.plugins.get_mut(&handle).unwrap();
+            plugin.triggered(widget);
+        }
+        Message::Clicked(pane) => {
+            state.focus = Some(pane);
+        }
+        Message::Dragged(pane_grid::DragEvent::Dropped { pane, target }) => {
+            state.panes.drop(pane, target);
+        }
+        Message::Dragged(_) => {}
+        Message::Resized(pane_grid::ResizeEvent { split, ratio }) => {
+            state.panes.resize(split, ratio);
+        }
+        Message::ThemeChanged(theme) => state.theme = theme,
     }
-    info!("Leaving");
 }
 
 fn view(state: &State) -> Element<'_, Message> {
@@ -55,28 +67,38 @@ fn view(state: &State) -> Element<'_, Message> {
         pane_grid::Content::new(responsive(move |_a| {
             container(plugin.view()).padding(10).into()
         }))
+        .style(main_style)
         .title_bar(
             pane_grid::TitleBar::new(row![text(plugin.title.clone())])
                 .padding(10)
-                .style(title_bar_style),
+                .style(main_style),
         )
     })
     .width(Fill)
     .height(Fill)
-    .spacing(10);
+    .spacing(10)
+    .on_click(Message::Clicked)
+    .on_drag(Message::Dragged)
+    .on_resize(10, Message::Resized);
 
-    container(pane_grid)
-        .width(Fill)
-        .height(Fill)
-        .padding(10)
-        .into()
+    let choose_theme = iced::widget::row![
+        text("Theme:"),
+        pick_list(Theme::ALL, Some(&state.theme), Message::ThemeChanged).width(Length::Shrink),
+    ]
+    .spacing(5)
+    .padding(10);
+
+    let content = container(pane_grid).width(Fill).height(Fill).padding(10);
+
+    iced::widget::column![choose_theme, content].into()
 }
 
-fn title_bar_style(theme: &Theme) -> Style {
+pub fn main_style(theme: &Theme) -> Style {
+    info!("Theme: {}", theme);
     let palette = theme.extended_palette();
 
-    container::Style {
-        background: Some(palette.background.weak.color.into()),
+    Style {
+        background: Some(palette.background.base.color.into()),
         border: Border {
             width: 2.0,
             color: palette.background.strong.color,

@@ -1,88 +1,39 @@
-use crate::Message;
 use amateraview_common::plugin::PluginHandle;
-use amateraview_common::ui::button::{Button, ButtonState};
-use amateraview_common::ui::{TreeView, WidgetHandle, WidgetState};
-use iced::Element;
-use iced::widget::{button, column, pane_grid, row, text};
+use iced::widget::pane_grid;
+use iced::widget::pane_grid::Axis;
+use plugin::Plugin;
 use std::collections::HashMap;
-use tracing::info;
+use iced::Theme;
+
+mod plugin;
 
 pub struct State {
     pub panes: pane_grid::State<PluginHandle>,
     pub plugins: HashMap<PluginHandle, Plugin>,
+    pub focus: Option<pane_grid::Pane>,
+    pub theme: Theme,
 }
 
 impl Default for State {
     fn default() -> Self {
-        let handle = PluginHandle::new();
-        let text = WidgetState::Text("World".into());
-        let button = WidgetState::Button(Button {
-            description: "Some nice button!".into(),
-            state: ButtonState::Released,
-        });
-        let button_function: Option<Box<dyn FnMut()>> = Some(Box::new(move || {
-            info!("Hello");
-        }));
-        let text_handle = WidgetHandle::new();
-        let button_handle = WidgetHandle::new();
-
-        let plugin = Plugin {
-            handle,
-            title: "Hello".into(),
-            tree_view: TreeView::Column(
-                [TreeView::Leaf(text_handle), TreeView::Leaf(button_handle)].into(),
-            ),
-            widgets: HashMap::from([
-                (text_handle, (text, None)),
-                (button_handle, (button, button_function)),
-            ]),
-        };
-        let (panes, _) = pane_grid::State::new(handle);
+        let (handle, plugin) = Plugin::create_demo();
+        let (handle2, plugin2) = Plugin::create_demo();
+        let (mut panes, pane) = pane_grid::State::new(handle);
+        panes.split(Axis::Vertical, pane, handle2);
         let mut plugins = HashMap::new();
         plugins.insert(handle, plugin);
-        Self { panes, plugins }
-    }
-}
-
-pub struct Plugin {
-    handle: PluginHandle,
-    pub title: String,
-    pub tree_view: TreeView,
-    pub widgets: HashMap<WidgetHandle, (WidgetState, Option<Box<dyn FnMut()>>)>,
-}
-
-impl Plugin {
-    pub fn view(&self) -> Element<Message> {
-        traverse(&self.tree_view, &self.widgets, self.handle)
-    }
-    pub fn triggered(&mut self, handle: WidgetHandle) {
-        if let Some((w, Some(f))) = self.widgets.get_mut(&handle) {
-            f();
+        plugins.insert(handle2, plugin2);
+        Self {
+            panes,
+            plugins,
+            focus: None,
+            theme: Theme::CatppuccinMocha,
         }
     }
 }
 
-fn traverse<'a>(
-    widget_tree: &'a TreeView,
-    widgets: &'a HashMap<WidgetHandle, (WidgetState, Option<Box<dyn FnMut()>>)>,
-    plugin_handle: PluginHandle,
-) -> Element<'a, Message> {
-    match widget_tree {
-        TreeView::Leaf(widget_handle) => {
-            let (widget, action) = &widgets[widget_handle];
-            match widget {
-                WidgetState::Button(b) => button(b.description.as_str())
-                    .on_press(Message::ButtonPressed(plugin_handle, *widget_handle))
-                    .style(button::primary)
-                    .into(),
-                WidgetState::Text(t) => text(t).into(),
-            }
-        }
-        TreeView::Row(content) => {
-            row(content.iter().map(|x| traverse(x, widgets, plugin_handle))).into()
-        }
-        TreeView::Column(content) => {
-            column(content.iter().map(|x| traverse(x, widgets, plugin_handle))).into()
-        }
+impl State {
+    pub fn theme(&self) -> Theme {
+        self.theme.clone()
     }
 }
