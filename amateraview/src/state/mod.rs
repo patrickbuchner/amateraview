@@ -1,9 +1,12 @@
 use amateraview_common::plugin::PluginHandle;
+use eyre::{Context, Result};
+use iced::Theme;
 use iced::widget::pane_grid;
 use iced::widget::pane_grid::Axis;
 use plugin::Plugin;
 use std::collections::HashMap;
-use iced::Theme;
+use std::net::{Ipv6Addr, SocketAddrV6};
+use tokio::net::TcpListener;
 
 mod plugin;
 
@@ -16,6 +19,12 @@ pub struct State {
 
 impl Default for State {
     fn default() -> Self {
+        Self::new().unwrap()
+    }
+}
+
+impl State {
+    pub fn new() -> Result<Self> {
         let (handle, plugin) = Plugin::create_demo();
         let (handle2, plugin2) = Plugin::create_demo();
         let (mut panes, pane) = pane_grid::State::new(handle);
@@ -23,16 +32,15 @@ impl Default for State {
         let mut plugins = HashMap::new();
         plugins.insert(handle, plugin);
         plugins.insert(handle2, plugin2);
-        Self {
+
+        Ok(Self {
             panes,
             plugins,
             focus: None,
             theme: Theme::CatppuccinMocha,
-        }
+        })
     }
-}
 
-impl State {
     pub fn theme(&self) -> Theme {
         self.theme.clone()
     }

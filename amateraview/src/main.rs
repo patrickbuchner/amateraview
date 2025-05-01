@@ -1,11 +1,15 @@
 use crate::state::State;
 use amateraview_common::plugin::PluginHandle;
 use amateraview_common::ui::WidgetHandle;
-use eyre::{Context, Result};
+use eyre::{Context, Report, Result};
+use iced::futures::SinkExt;
 use iced::widget::container::Style;
 use iced::widget::{PaneGrid, container, pane_grid, pick_list, responsive, row, text};
-use iced::{Border, Element, Fill, Length, Theme};
-use tracing::info;
+use iced::{Border, Element, Fill, Length, Subscription, Theme, stream};
+use std::net::{Ipv6Addr, SocketAddr, SocketAddrV6};
+use std::sync::Arc;
+use tokio::net::{TcpListener, TcpStream};
+use tracing::{error, info};
 
 mod state;
 
@@ -28,6 +32,7 @@ fn main() -> Result<()> {
     iced::application("A counter", update, view)
         .theme(State::theme)
         .centered()
+        .subscription(tcp_listener)
         .run()
         .wrap_err("Failed to run the application.")
 }
@@ -39,6 +44,8 @@ enum Message {
     Dragged(pane_grid::DragEvent),
     Resized(pane_grid::ResizeEvent),
     ThemeChanged(Theme),
+    UnhandledError(Arc<Report>),
+    ReceivedConnectionRequest(PluginConnection),
 }
 
 fn update(state: &mut State, message: Message) {
@@ -58,6 +65,14 @@ fn update(state: &mut State, message: Message) {
             state.panes.resize(split, ratio);
         }
         Message::ThemeChanged(theme) => state.theme = theme,
+
+        Message::ReceivedConnectionRequest(plugin_connection) => {
+            info!(
+                "A possible plugin connected from {:?}",
+                plugin_connection.addr
+            );
+        }
+        Message::UnhandledError(e) => error!("{e}"),
     }
 }
 
@@ -94,7 +109,6 @@ fn view(state: &State) -> Element<'_, Message> {
 }
 
 pub fn main_style(theme: &Theme) -> Style {
-    info!("Theme: {}", theme);
     let palette = theme.extended_palette();
 
     Style {
@@ -105,5 +119,45 @@ pub fn main_style(theme: &Theme) -> Style {
             ..Border::default()
         },
         ..Default::default()
+    }
+}
+
+fn tcp_listener(state: &State) -> Subscription<Message> {
+    Subscription::run_with_id(
+        "Tcp Listener",
+        stream::channel(100, |mut output| async move {
+            let tcp = TcpListener::bind(SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 11_111, 0, 0))
+                .await
+                .wrap_err("Could not bind to port 11_111.");
+
+            match tcp {
+                Ok(tcp) => loop {
+                    if let Ok((stream, addr)) = tcp.accept().await {
+                        output
+                            .send(Message::ReceivedConnectionRequest(PluginConnection::new(
+                                stream, addr,
+                            )))
+                            .await;
+                    }
+                },
+                Err(err) => {
+                    output.send(Message::UnhandledError(Arc::new(err))).await;
+                }
+            }
+        }),
+    )
+}
+
+#[derive(Debug, Clone)]
+pub struct PluginConnection {
+    pub stream: Arc<TcpStream>,
+    pub addr: SocketAddr,
+}
+impl PluginConnection {
+    pub fn new(stream: TcpStream, addr: SocketAddr) -> Self {
+        Self {
+            stream: Arc::new(stream),
+            addr,
+        }
     }
 }

@@ -1,0 +1,14 @@
+[package]
+name = "amateraview-connection"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio.workspace = true
+tokio-util.workspace = true
+amateraview-common.workspace = true
+bytes.workspace = true
+semver.workspace = true
+serde.workspace = true
+rmp-serde.workspace = true
+serde_bytes.workspace = true

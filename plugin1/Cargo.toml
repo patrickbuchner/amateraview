@@ -5,6 +5,9 @@ edition = "2024"
 
 [dependencies]
 amateraview-common.workspace = true
+amateraview-connection.workspace = true
+eyre.workspace = true
+semver.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
