@@ -1,5 +1,7 @@
-use iced::widget::pane_grid;
 use crate::state::State;
+use iced::widget::pane_grid;
+
+pub mod pane;
 
 #[derive(Debug, Clone)]
 pub enum PaneMessage {
@@ -22,3 +24,4 @@ pub fn handle_pane_changes(state: &mut State, pm: PaneMessage) {
         }
     }
 }
+

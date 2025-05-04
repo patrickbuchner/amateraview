@@ -4,14 +4,15 @@ use amateraview_common::plugin::PluginHandle;
 use amateraview_common::ui::WidgetHandle;
 use eyre::{Context, Result};
 use iced::widget::container::Style;
-use iced::widget::{PaneGrid, container, pane_grid, pick_list, responsive, row, text};
+use iced::widget::{container, pick_list, text};
 use iced::{Border, Element, Event, Fill, Length, Subscription, Task, Theme, event, window};
 use tokio::sync::mpsc::Sender;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 pub mod ui;
-use ui::PaneMessage;
+use crate::ui::pane::pane_type::PaneType;
+use ui::{PaneMessage, pane};
 
 mod state;
 mod work;
@@ -60,24 +61,7 @@ pub enum Message {
 }
 
 fn view(state: &State) -> Element<'_, Message> {
-    let pane_grid = PaneGrid::new(&state.panes, |_id, handle, _is_maximized| {
-        let plugin = state.plugins.get(handle).unwrap();
-        pane_grid::Content::new(responsive(move |_a| {
-            container(plugin.view()).padding(10).into()
-        }))
-        .style(main_style)
-        .title_bar(
-            pane_grid::TitleBar::new(row![text(plugin.title.clone())])
-                .padding(10)
-                .style(main_style),
-        )
-    })
-    .width(Fill)
-    .height(Fill)
-    .spacing(10)
-    .on_click(|p| Message::Pane(PaneMessage::Clicked(p)))
-    .on_drag(|d| Message::Pane(PaneMessage::Dragged(d)))
-    .on_resize(10, |r| Message::Pane(PaneMessage::Resized(r)));
+    let pane_grid = pane::pane_view(state);
 
     let choose_theme = iced::widget::row![
         text("Theme:"),
@@ -109,7 +93,14 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
     match message {
         Message::ButtonPressed(handle, widget) => {
             let plugin = state.plugins.get_mut(&handle).unwrap();
-            plugin.triggered(widget);
+            match plugin {
+                PaneType::External(e) => {
+                    e.triggered(widget);
+                }
+                PaneType::Internal => {
+                    todo!("Internal panes not implemented yet.")
+                }
+            }
             Task::none()
         }
         Message::Pane(pm) => {

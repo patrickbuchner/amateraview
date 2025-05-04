@@ -1,7 +1,6 @@
 use crate::Message;
 use crate::state::State;
 use iced::futures::SinkExt;
-use iced::futures::channel::oneshot::Canceled;
 use iced::{Subscription, stream};
 use std::collections::HashMap;
 use tokio::sync::mpsc::{Receiver, Sender};
