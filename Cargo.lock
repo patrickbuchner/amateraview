@@ -78,6 +78,7 @@ dependencies = [
  "eyre",
  "iced",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
 ]

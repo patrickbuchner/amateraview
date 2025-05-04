@@ -1,14 +1,16 @@
 use crate::Message;
 use crate::state::State;
 use iced::futures::SinkExt;
+use iced::futures::channel::oneshot::Canceled;
 use iced::{Subscription, stream};
 use std::collections::HashMap;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 #[derive(Debug, Clone)]
-pub enum Jobs {
+pub enum Job {
     ListenForPlugins { port: u16 },
     StopListeningForPlugins,
 }
@@ -16,21 +18,22 @@ pub enum Jobs {
 pub mod plugins;
 pub async fn main_job_loop(
     sender: iced::futures::channel::mpsc::Sender<Message>,
-    mut receiver: Receiver<Jobs>,
+    mut receiver: Receiver<(Job, CancellationToken)>,
 ) {
     info!("Starting main job loop");
     let mut actors = HashMap::new();
     let s = translate_job_messages_in_ui_messages(sender.clone(), &mut actors);
     info!("Started translator");
-    while let Some(job) = receiver.recv().await {
+    while let Some((job, token)) = receiver.recv().await {
         info!("Received job: {:?}", job);
         match job {
-            Jobs::ListenForPlugins{ port} => {
-                let tcp_listener = tokio::spawn(plugins::tcp_listener(s.clone(), port));
+            Job::ListenForPlugins { port } => {
+                let tcp_listener = tokio::spawn(plugins::tcp_listener(s.clone(), port, token));
                 actors.insert("TCP Listener", tcp_listener);
             }
-            Jobs::StopListeningForPlugins => {
-                actors.remove("TCP Listener");
+            Job::StopListeningForPlugins => {
+                let h = actors.remove("TCP Listener").unwrap();
+                h.abort()
             }
         }
     }

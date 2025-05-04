@@ -1,13 +1,14 @@
 use crate::state::State;
-use crate::work::Jobs;
+use crate::work::Job;
 use amateraview_common::plugin::PluginHandle;
 use amateraview_common::ui::WidgetHandle;
 use eyre::{Context, Result};
 use iced::widget::container::Style;
 use iced::widget::{PaneGrid, container, pane_grid, pick_list, responsive, row, text};
-use iced::{Border, Element, Fill, Length, Task, Theme};
+use iced::{Border, Element, Event, Fill, Length, Subscription, Task, Theme, event, window};
 use tokio::sync::mpsc::Sender;
-use tracing::info;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
 
 pub mod ui;
 use ui::PaneMessage;
@@ -34,7 +35,13 @@ fn main() -> Result<()> {
     iced::application("A counter", update, view)
         .theme(State::theme)
         .centered()
-        .subscription(work::worker_listener)
+        .subscription(|state| {
+            Subscription::batch([
+                work::worker_listener(state),
+                event::listen().map(Message::EventOccurred),
+            ])
+        })
+        .exit_on_close_request(false)
         .run()
         .wrap_err("Failed to run the application.")
 }
@@ -42,10 +49,14 @@ fn main() -> Result<()> {
 #[derive(Debug, Clone)]
 pub enum Message {
     ButtonPressed(PluginHandle, WidgetHandle),
+    EventOccurred(Event),
     Pane(PaneMessage),
     ThemeChanged(Theme),
-    MainWorkLoop(Sender<Jobs>),
-    Request(Jobs),
+    MainWorkLoop(Sender<(Job, CancellationToken)>),
+    Request((Job, CancellationToken)),
+    Error(String),
+    StartShutdown,
+    Shutdown,
 }
 
 fn view(state: &State) -> Element<'_, Message> {
@@ -118,7 +129,32 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
         Message::MainWorkLoop(sender) => {
             state.job_requester = Some(sender);
             info!("Got job loop started up and request it listening for plugins on port 11_111.");
-            Task::done(Message::Request(Jobs::ListenForPlugins { port: 11_111 }))
+            Task::done(Message::Request((
+                Job::ListenForPlugins { port: 11_111 },
+                state.cancellation_token.clone(),
+            )))
         }
+        Message::Error(message) => {
+            error!(message);
+            Task::done(Message::StartShutdown)
+        }
+        Message::StartShutdown => {
+            state.cancellation_token.cancel();
+            Task::done(Message::Shutdown)
+        }
+        Message::Shutdown => iced::exit(),
+        Message::EventOccurred(event) => handle_events(event),
+    }
+}
+
+fn handle_events(e: Event) -> Task<Message> {
+    match e {
+        Event::Keyboard(_) => Task::none(),
+        Event::Mouse(_) => Task::none(),
+        Event::Window(we) => match we {
+            window::Event::CloseRequested => Task::done(Message::StartShutdown),
+            _ => Task::none(),
+        },
+        Event::Touch(_) => Task::none(),
     }
 }

@@ -6,7 +6,8 @@ use iced::widget::pane_grid::Axis;
 use plugin::Plugin;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
-use crate::work::Jobs;
+use tokio_util::sync::CancellationToken;
+use crate::work::Job;
 
 mod plugin;
 
@@ -15,7 +16,8 @@ pub struct State {
     pub plugins: HashMap<PluginHandle, Plugin>,
     pub focus: Option<pane_grid::Pane>,
     pub theme: Theme,
-    pub job_requester: Option<Sender<Jobs>>,
+    pub job_requester: Option<Sender<(Job,CancellationToken)>>,
+    pub cancellation_token: CancellationToken,
 }
 
 impl Default for State {
@@ -34,12 +36,14 @@ impl State {
         plugins.insert(handle, plugin);
         plugins.insert(handle2, plugin2);
 
+        let token = CancellationToken::new();
         Ok(Self {
             panes,
             plugins,
             focus: None,
             theme: Theme::CatppuccinMocha,
             job_requester: None,
+            cancellation_token: token,
         })
     }
 
