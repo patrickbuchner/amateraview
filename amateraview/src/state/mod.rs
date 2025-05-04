@@ -1,12 +1,12 @@
 use amateraview_common::plugin::PluginHandle;
-use eyre::{Context, Result};
+use eyre::Result;
 use iced::Theme;
 use iced::widget::pane_grid;
 use iced::widget::pane_grid::Axis;
 use plugin::Plugin;
 use std::collections::HashMap;
-use std::net::{Ipv6Addr, SocketAddrV6};
-use tokio::net::TcpListener;
+use tokio::sync::mpsc::Sender;
+use crate::work::Jobs;
 
 mod plugin;
 
@@ -15,6 +15,7 @@ pub struct State {
     pub plugins: HashMap<PluginHandle, Plugin>,
     pub focus: Option<pane_grid::Pane>,
     pub theme: Theme,
+    pub job_requester: Option<Sender<Jobs>>,
 }
 
 impl Default for State {
@@ -38,6 +39,7 @@ impl State {
             plugins,
             focus: None,
             theme: Theme::CatppuccinMocha,
+            job_requester: None,
         })
     }
 

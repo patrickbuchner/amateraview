@@ -1,17 +1,19 @@
 use crate::state::State;
+use crate::work::Jobs;
 use amateraview_common::plugin::PluginHandle;
 use amateraview_common::ui::WidgetHandle;
-use eyre::{Context, Report, Result};
-use iced::futures::SinkExt;
+use eyre::{Context, Result};
 use iced::widget::container::Style;
 use iced::widget::{PaneGrid, container, pane_grid, pick_list, responsive, row, text};
-use iced::{Border, Element, Fill, Length, Subscription, Theme, stream};
-use std::net::{Ipv6Addr, SocketAddr, SocketAddrV6};
-use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
-use tracing::{error, info};
+use iced::{Border, Element, Fill, Length, Task, Theme};
+use tokio::sync::mpsc::Sender;
+use tracing::info;
+
+pub mod ui;
+use ui::PaneMessage;
 
 mod state;
+mod work;
 
 fn main() -> Result<()> {
     let subscriber = tracing_subscriber::fmt()
@@ -32,48 +34,18 @@ fn main() -> Result<()> {
     iced::application("A counter", update, view)
         .theme(State::theme)
         .centered()
-        .subscription(tcp_listener)
+        .subscription(work::worker_listener)
         .run()
         .wrap_err("Failed to run the application.")
 }
 
 #[derive(Debug, Clone)]
-enum Message {
+pub enum Message {
     ButtonPressed(PluginHandle, WidgetHandle),
-    Clicked(pane_grid::Pane),
-    Dragged(pane_grid::DragEvent),
-    Resized(pane_grid::ResizeEvent),
+    Pane(PaneMessage),
     ThemeChanged(Theme),
-    UnhandledError(Arc<Report>),
-    ReceivedConnectionRequest(PluginConnection),
-}
-
-fn update(state: &mut State, message: Message) {
-    match message {
-        Message::ButtonPressed(handle, widget) => {
-            let plugin = state.plugins.get_mut(&handle).unwrap();
-            plugin.triggered(widget);
-        }
-        Message::Clicked(pane) => {
-            state.focus = Some(pane);
-        }
-        Message::Dragged(pane_grid::DragEvent::Dropped { pane, target }) => {
-            state.panes.drop(pane, target);
-        }
-        Message::Dragged(_) => {}
-        Message::Resized(pane_grid::ResizeEvent { split, ratio }) => {
-            state.panes.resize(split, ratio);
-        }
-        Message::ThemeChanged(theme) => state.theme = theme,
-
-        Message::ReceivedConnectionRequest(plugin_connection) => {
-            info!(
-                "A possible plugin connected from {:?}",
-                plugin_connection.addr
-            );
-        }
-        Message::UnhandledError(e) => error!("{e}"),
-    }
+    MainWorkLoop(Sender<Jobs>),
+    Request(Jobs),
 }
 
 fn view(state: &State) -> Element<'_, Message> {
@@ -92,9 +64,9 @@ fn view(state: &State) -> Element<'_, Message> {
     .width(Fill)
     .height(Fill)
     .spacing(10)
-    .on_click(Message::Clicked)
-    .on_drag(Message::Dragged)
-    .on_resize(10, Message::Resized);
+    .on_click(|p| Message::Pane(PaneMessage::Clicked(p)))
+    .on_drag(|d| Message::Pane(PaneMessage::Dragged(d)))
+    .on_resize(10, |r| Message::Pane(PaneMessage::Resized(r)));
 
     let choose_theme = iced::widget::row![
         text("Theme:"),
@@ -122,42 +94,31 @@ pub fn main_style(theme: &Theme) -> Style {
     }
 }
 
-fn tcp_listener(state: &State) -> Subscription<Message> {
-    Subscription::run_with_id(
-        "Tcp Listener",
-        stream::channel(100, |mut output| async move {
-            let tcp = TcpListener::bind(SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 11_111, 0, 0))
-                .await
-                .wrap_err("Could not bind to port 11_111.");
-
-            match tcp {
-                Ok(tcp) => loop {
-                    if let Ok((stream, addr)) = tcp.accept().await {
-                        output
-                            .send(Message::ReceivedConnectionRequest(PluginConnection::new(
-                                stream, addr,
-                            )))
-                            .await;
-                    }
-                },
-                Err(err) => {
-                    output.send(Message::UnhandledError(Arc::new(err))).await;
-                }
+fn update(state: &mut State, message: Message) -> Task<Message> {
+    match message {
+        Message::ButtonPressed(handle, widget) => {
+            let plugin = state.plugins.get_mut(&handle).unwrap();
+            plugin.triggered(widget);
+            Task::none()
+        }
+        Message::Pane(pm) => {
+            ui::handle_pane_changes(state, pm);
+            Task::none()
+        }
+        Message::ThemeChanged(theme) => {
+            state.theme = theme;
+            Task::none()
+        }
+        Message::Request(job) => {
+            if let Some(sender) = &state.job_requester {
+                _ = sender.blocking_send(job);
             }
-        }),
-    )
-}
-
-#[derive(Debug, Clone)]
-pub struct PluginConnection {
-    pub stream: Arc<TcpStream>,
-    pub addr: SocketAddr,
-}
-impl PluginConnection {
-    pub fn new(stream: TcpStream, addr: SocketAddr) -> Self {
-        Self {
-            stream: Arc::new(stream),
-            addr,
+            Task::none()
+        }
+        Message::MainWorkLoop(sender) => {
+            state.job_requester = Some(sender);
+            info!("Got job loop started up and request it listening for plugins on port 11_111.");
+            Task::done(Message::Request(Jobs::ListenForPlugins { port: 11_111 }))
         }
     }
 }
