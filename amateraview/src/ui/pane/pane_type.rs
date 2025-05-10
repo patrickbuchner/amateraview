@@ -1,6 +1,6 @@
-use iced::Element;
 use crate::Message;
 use crate::state::plugin::Plugin;
+use iced::Element;
 
 pub enum PaneType {
     External(Plugin),

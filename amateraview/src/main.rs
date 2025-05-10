@@ -5,7 +5,8 @@ use amateraview_common::ui::WidgetHandle;
 use eyre::{Context, Result};
 use iced::widget::container::Style;
 use iced::widget::{container, pick_list, text};
-use iced::{Border, Element, Event, Fill, Length, Subscription, Task, Theme, event, window};
+use iced::window::Position;
+use iced::{Border, Element, Event, Fill, Length, Point, Subscription, Task, Theme, event, window};
 use tokio::sync::mpsc::Sender;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -13,6 +14,8 @@ use tracing::{error, info};
 pub mod ui;
 use crate::ui::pane::pane_type::PaneType;
 use ui::{PaneMessage, pane};
+
+pub mod configuration;
 
 mod state;
 mod work;
@@ -35,7 +38,7 @@ fn main() -> Result<()> {
 
     iced::application("A counter", update, view)
         .theme(State::theme)
-        .centered()
+        .position(Position::Specific(Point { x: 0., y: 0. }))
         .subscription(|state| {
             Subscription::batch([
                 work::worker_listener(state),

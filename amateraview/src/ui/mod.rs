@@ -24,4 +24,3 @@ pub fn handle_pane_changes(state: &mut State, pm: PaneMessage) {
         }
     }
 }
-

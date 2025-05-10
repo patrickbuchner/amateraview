@@ -2,7 +2,7 @@ use crate::Message;
 use crate::state::State;
 use crate::ui::PaneMessage;
 use iced::Fill;
-use iced::widget::{container, pane_grid, responsive, row, text, PaneGrid};
+use iced::widget::{PaneGrid, container, pane_grid, responsive, row, text};
 pub mod pane_type;
 
 pub fn pane_view(state: &State) -> PaneGrid<Message> {

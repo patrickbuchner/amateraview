@@ -1,5 +1,5 @@
-use std::fmt::Display;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, Hash, Serialize, Deserialize, PartialEq)]
 pub struct PluginHandle {
@@ -9,7 +9,7 @@ pub struct PluginHandle {
 impl Display for PluginHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.id)
-    }   
+    }
 }
 
 impl Default for PluginHandle {

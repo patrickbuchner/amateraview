@@ -1,7 +1,12 @@
 use crate::Message;
+use amateraview_common::plugin::PluginHandle;
+use amateraview_connection::{
+    LengthDelimitedReceiver, LengthDelimitedSender, Lifetime, RejectionReason,
+};
 use eyre::WrapErr;
-use std::net::{Ipv6Addr, SocketAddrV6};
-use tokio::net::TcpListener;
+use semver::Version;
+use std::net::{Ipv6Addr, SocketAddr, SocketAddrV6};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::select;
 use tokio::sync::mpsc::Sender;
 use tokio_util::sync::CancellationToken;
@@ -22,8 +27,8 @@ pub async fn tcp_listener(
                 _ = cancellation_token.cancelled() => {
                     info!("TCP listener cancelled");
                     break; }
-                Ok((_stream,addr)) = tcp.accept() => {
-                    info!("New connection from {:?}", addr);
+                Ok((stream, addr)) = tcp.accept() => {
+                    tokio::spawn(make_handshake(stream, addr));
                 }
             }
         },
@@ -33,17 +38,25 @@ pub async fn tcp_listener(
     }
 }
 
-// #[derive(Debug, Clone)]
-// pub struct PluginConnection {
-//     pub stream: Arc<TcpStream>,
-//     pub addr: SocketAddr,
-// }
-//
-// impl PluginConnection {
-//     pub fn new(stream: TcpStream, addr: SocketAddr) -> Self {
-//         Self {
-//             stream: Arc::new(stream),
-//             addr,
-//         }
-//     }
-// }
+pub async fn make_handshake(stream: TcpStream, addr: SocketAddr) {
+    info!("New connection from {:?}", addr);
+    let (reader, writer) = tokio::io::split(stream);
+    let mut sender = LengthDelimitedSender::new(writer);
+    let mut reader = LengthDelimitedReceiver::new(reader);
+
+    if let Ok(Lifetime::Initiate(plugin_introduction)) = reader.receive::<Lifetime>().await {
+        info!("Plugin introduction: {:?}", plugin_introduction);
+        if plugin_introduction
+            .required_version
+            .matches(&Version::new(0, 1, 0))
+        {
+            let handle = PluginHandle::new();
+            sender.send(&Lifetime::Accepted(handle)).await.unwrap();
+        } else {
+            sender
+                .send(&Lifetime::Rejected(RejectionReason::VersionMismatch))
+                .await
+                .unwrap();
+        }
+    }
+}

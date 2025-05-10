@@ -13,13 +13,3 @@ pub enum MessageToPlugin {
     Response(WidgetHandle, WidgetState),
     Update(WidgetHandle, WidgetState),
 }
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum Lifetime {
-    Initiate(Option<PluginHandle>),
-    Accepted(PluginHandle),
-    AreYouAlive(PluginHandle),
-    StillAlive(PluginHandle),
-    BeforeShutdown,
-    Shutdown,
-}

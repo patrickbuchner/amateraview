@@ -19,7 +19,7 @@ impl Plugin {
     pub fn view(&self) -> Element<Message> {
         traverse(&self.tree_view, &self.widgets, self.handle)
     }
-    
+
     pub fn triggered(&mut self, handle: WidgetHandle) {
         if let Some(a) = self.actions.get_mut(&handle) {
             a();
